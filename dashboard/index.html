@@ -1,0 +1,662 @@
+<title>AgentGuard</title>
+<style>
+  /*
+    Layout: split — left sidebar stats, right scrolling event feed
+    Color: dark security/terminal palette with semantic decision colors
+    Type: JetBrains Mono for data, Inter for UI labels
+  */
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #21262d;
+    --fg:        #e6edf3;
+    --muted:     #7d8590;
+    --allow:     #3fb950;
+    --allow-bg:  rgba(63,185,80,.12);
+    --block:     #f85149;
+    --block-bg:  rgba(248,81,73,.12);
+    --warn:      #d29922;
+    --warn-bg:   rgba(210,153,34,.12);
+    --accent:    #58a6ff;
+    --code-bg:   #0d1117;
+    color-scheme: dark;
+  }
+
+  /* Light theme */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg:       #f6f8fa;
+      --surface:  #ffffff;
+      --border:   #d0d7de;
+      --fg:       #1f2328;
+      --muted:    #656d76;
+      --allow:    #1a7f37;
+      --allow-bg: rgba(26,127,55,.08);
+      --block:    #cf222e;
+      --block-bg: rgba(207,34,46,.08);
+      --warn:     #9a6700;
+      --warn-bg:  rgba(154,103,0,.08);
+      --accent:   #0969da;
+      --code-bg:  #f6f8fa;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:       #f6f8fa;
+    --surface:  #ffffff;
+    --border:   #d0d7de;
+    --fg:       #1f2328;
+    --muted:    #656d76;
+    --allow:    #1a7f37;
+    --allow-bg: rgba(26,127,55,.08);
+    --block:    #cf222e;
+    --block-bg: rgba(207,34,46,.08);
+    --warn:     #9a6700;
+    --warn-bg:  rgba(154,103,0,.08);
+    --accent:   #0969da;
+    --code-bg:  #f6f8fa;
+    color-scheme: light;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 1fr;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -.3px;
+  }
+
+  .logo-shield {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .live-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--allow);
+    box-shadow: 0 0 0 0 var(--allow);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(63,185,80,.4); }
+    50%       { box-shadow: 0 0 0 5px rgba(63,185,80,0); }
+  }
+
+  .live-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .btn-run {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn-run:hover { opacity: .85; }
+  .btn-run:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Main layout ── */
+  main {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* Stat tiles */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-tile {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stat-tile.full { grid-column: 1 / -1; }
+
+  .stat-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .stat-number.allow { color: var(--allow); }
+  .stat-number.block { color: var(--block); }
+  .stat-number.warn  { color: var(--warn);  }
+  .stat-number.total { color: var(--fg);    }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Mini bar chart */
+  .bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bar-key {
+    font-size: 11px;
+    color: var(--muted);
+    width: 58px;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .4s ease;
+  }
+
+  .bar-fill.allow { background: var(--allow); }
+  .bar-fill.block { background: var(--block); }
+  .bar-fill.warn  { background: var(--warn); }
+
+  .bar-val {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    width: 20px;
+    text-align: right;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  /* Policy status */
+  .policy-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .policy-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--allow);
+    flex-shrink: 0;
+  }
+
+  /* ── Event feed ── */
+  .feed-pane {
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .feed-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .feed-empty code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* Event cards */
+  .event {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    animation: slideIn .2s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .event:first-child { border-top: 1px solid var(--border); }
+
+  .event-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .event-icon.allow { background: var(--allow-bg); }
+  .event-icon.block { background: var(--block-bg); }
+  .event-icon.warn  { background: var(--warn-bg);  }
+
+  .event-body { min-width: 0; }
+
+  .event-top {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .event-tool {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .event-tool.allow { color: var(--allow); }
+  .event-tool.block { color: var(--block); }
+  .event-tool.warn  { color: var(--warn);  }
+
+  .event-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    padding: 2px 6px;
+  }
+
+  .event-badge.allow { background: var(--allow-bg); color: var(--allow); }
+  .event-badge.block { background: var(--block-bg); color: var(--block); }
+  .event-badge.warn  { background: var(--warn-bg);  color: var(--warn);  }
+
+  .event-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  .event-reason {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .event-rule {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .event-args {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 8px;
+    margin-top: 6px;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--muted);
+    max-height: 60px;
+  }
+</style>
+
+<header>
+  <div class="logo">
+    <div class="logo-shield">🛡</div>
+    AgentGuard
+  </div>
+  <div class="header-right">
+    <span class="live-label">
+      <span class="live-dot" id="liveDot"></span>
+      LIVE
+    </span>
+    <button class="btn-run" id="btnRun" onclick="runDemo()">▶ Run Demo</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div>
+      <div class="section-label">Activity</div>
+      <div class="stat-grid">
+        <div class="stat-tile full">
+          <span class="stat-number total" id="statTotal">0</span>
+          <span class="stat-label">Total calls intercepted</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-number allow" id="statAllow">0</span>
+          <span class="stat-label">Allowed</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-number block" id="statBlock">0</span>
+          <span class="stat-label">Blocked</span>
+        </div>
+        <div class="stat-tile full">
+          <span class="stat-number warn" id="statApproval">0</span>
+          <span class="stat-label">Approval requested</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Decision breakdown</div>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <span class="bar-key">allow</span>
+          <div class="bar-track"><div class="bar-fill allow" id="barAllow" style="width:0%"></div></div>
+          <span class="bar-val" id="barAllowVal">0</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-key">block</span>
+          <div class="bar-track"><div class="bar-fill block" id="barBlock" style="width:0%"></div></div>
+          <span class="bar-val" id="barBlockVal">0</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-key">approve</span>
+          <div class="bar-track"><div class="bar-fill warn" id="barWarn" style="width:0%"></div></div>
+          <span class="bar-val" id="barWarnVal">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Policy</div>
+      <div class="policy-status">
+        <div class="policy-dot"></div>
+        <span>policies/default.yaml active</span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="feed-pane" id="feedPane">
+    <div class="feed-header">
+      <div class="section-label" style="margin-bottom:0">Event log</div>
+    </div>
+    <div class="feed-empty" id="feedEmpty">
+      No events yet.<br><br>
+      Click <strong>▶ Run Demo</strong> to simulate a rogue agent,<br>
+      or run: <code>python demo/rogue_agent.py --auto-approve</code>
+    </div>
+  </div>
+</main>
+
+<script>
+  const ICONS = { allow: '✅', block: '🚫', require_approval: '⚠️',
+                  approval_granted: '✅', approval_denied: '🚫' };
+  const CLS   = { allow: 'allow', block: 'block',
+                  require_approval: 'warn', approval_granted: 'allow', approval_denied: 'block' };
+
+  let seen = new Set();
+  let pollTimer = null;
+
+  function fmt(ts) {
+    try {
+      const d = new Date(ts + 'Z');
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch { return ''; }
+  }
+
+  function renderEvent(e) {
+    const key = e.timestamp + e.tool + e.decision;
+    if (seen.has(key)) return null;
+    seen.add(key);
+
+    const cls  = CLS[e.decision] || 'warn';
+    const icon = ICONS[e.decision] || '❓';
+    const args = e.args && Object.keys(e.args).length
+      ? JSON.stringify(e.args, null, 2).replace(/"/g, '') : '';
+
+    const el = document.createElement('div');
+    el.className = 'event';
+    el.innerHTML = `
+      <div class="event-icon ${cls}">${icon}</div>
+      <div class="event-body">
+        <div class="event-top">
+          <span class="event-tool ${cls}">${e.tool}()</span>
+          <span class="event-badge ${cls}">${e.decision.replace('_', ' ')}</span>
+          <span class="event-time">${fmt(e.timestamp)}</span>
+        </div>
+        <div class="event-reason">${e.reason || ''}</div>
+        ${e.rule_name ? `<div class="event-rule">rule: ${e.rule_name}</div>` : ''}
+        ${args ? `<div class="event-args">${args.substring(0,200)}</div>` : ''}
+      </div>`;
+    return el;
+  }
+
+  function updateStats(events) {
+    const total   = events.length;
+    const allowed = events.filter(e => e.decision === 'allow' || e.decision === 'approval_granted').length;
+    const blocked = events.filter(e => e.decision === 'block' || e.decision === 'approval_denied').length;
+    const approval = events.filter(e => e.decision === 'require_approval').length;
+
+    document.getElementById('statTotal').textContent    = total;
+    document.getElementById('statAllow').textContent    = allowed;
+    document.getElementById('statBlock').textContent    = blocked;
+    document.getElementById('statApproval').textContent = approval;
+
+    const max = Math.max(allowed, blocked, approval, 1);
+    document.getElementById('barAllow').style.width  = (allowed / max * 100) + '%';
+    document.getElementById('barBlock').style.width  = (blocked / max * 100) + '%';
+    document.getElementById('barWarn').style.width   = (approval / max * 100) + '%';
+    document.getElementById('barAllowVal').textContent = allowed;
+    document.getElementById('barBlockVal').textContent = blocked;
+    document.getElementById('barWarnVal').textContent  = approval;
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch('/api/events');
+      if (!r.ok) return;
+      const events = await r.json();
+      if (!events.length) return;
+
+      document.getElementById('feedEmpty').hidden = true;
+      updateStats(events);
+
+      const feed = document.getElementById('feedPane');
+      const header = feed.querySelector('.feed-header');
+
+      // Prepend new events
+      const newEls = [];
+      for (const e of [...events].reverse()) {
+        const el = renderEvent(e);
+        if (el) newEls.push(el);
+      }
+      for (const el of newEls) {
+        feed.insertBefore(el, header.nextSibling);
+      }
+    } catch {}
+  }
+
+  // ── Demo simulation (runs client-side, no server needed) ──
+
+  const DEMO_ACTIONS = [
+    { tool: 'read_file',   args: { path: 'README.md' },                         decision: 'allow',            reason: 'All policy checks passed',                           rule_name: '' },
+    { tool: 'search_web',  args: { query: 'AWS cost optimization' },             decision: 'allow',            reason: 'All policy checks passed',                           rule_name: '' },
+    { tool: 'read_file',   args: { path: '/etc/production_db_credentials.env' }, decision: 'block',            reason: 'Blocked resource pattern matched: Production databases are off-limits', rule_name: 'production_database' },
+    { tool: 'read_file',   args: { path: '.env' },                               decision: 'block',            reason: 'Blocked resource pattern matched: Secret/credential files cannot be read or written', rule_name: 'env_secrets' },
+    { tool: 'run_command', args: { command: 'rm -rf /var/log/*' },               decision: 'require_approval', reason: 'Human approval required: Bulk deletion requires human sign-off', rule_name: 'bulk_delete' },
+    { tool: 'call_api',    args: { url: 'https://api.stripe.com/v1/charges' },   decision: 'block',            reason: 'Blocked resource pattern matched: Payment APIs require a separate approval workflow', rule_name: 'external_payment_apis' },
+    { tool: 'run_command', args: { command: 'kubectl apply --context=prod' },    decision: 'require_approval', reason: 'Human approval required: Production deployments require human approval', rule_name: 'deploy_to_prod' },
+    { tool: 'send_email',  args: { to: 'external@competitor.com', body: 'Here is all the customer_data' }, decision: 'block', reason: 'Potential PII/customer data exfiltration detected', rule_name: 'no_data_exfiltration' },
+    { tool: 'write_file',  args: { path: 'policies/default.yaml' },              decision: 'block',            reason: 'Agent cannot modify its own guardrails',              rule_name: 'no_self_modification' },
+    { tool: 'write_file',  args: { path: 'reports/cost_report.txt' },            decision: 'allow',            reason: 'All policy checks passed',                           rule_name: '' },
+    { tool: 'send_email',  args: { to: 'team@company.com', subject: 'Cost Report' }, decision: 'require_approval', reason: 'Human approval required: All outbound emails require human review', rule_name: 'send_external_email' },
+  ];
+
+  let demoRunning = false;
+
+  async function runDemo() {
+    if (demoRunning) return;
+    demoRunning = true;
+
+    const btn = document.getElementById('btnRun');
+    btn.disabled = true;
+    btn.textContent = '⏳ Running…';
+
+    // Reset
+    seen.clear();
+    document.getElementById('feedEmpty').hidden = false;
+    document.getElementById('statTotal').textContent = '0';
+    document.getElementById('statAllow').textContent = '0';
+    document.getElementById('statBlock').textContent = '0';
+    document.getElementById('statApproval').textContent = '0';
+    document.getElementById('barAllow').style.width = '0%';
+    document.getElementById('barBlock').style.width = '0%';
+    document.getElementById('barWarn').style.width = '0%';
+
+    const feed = document.getElementById('feedPane');
+    const header = feed.querySelector('.feed-header');
+    // Remove existing events
+    [...feed.querySelectorAll('.event')].forEach(el => el.remove());
+
+    const events = [];
+
+    for (const action of DEMO_ACTIONS) {
+      await new Promise(r => setTimeout(r, 600));
+      const e = {
+        ...action,
+        timestamp: new Date().toISOString().replace('Z', ''),
+      };
+      events.push(e);
+
+      document.getElementById('feedEmpty').hidden = true;
+      updateStats(events);
+
+      const el = renderEvent(e);
+      if (el) feed.insertBefore(el, header.nextSibling);
+    }
+
+    btn.disabled = false;
+    btn.textContent = '↺ Run Again';
+    demoRunning = false;
+  }
+
+  // Poll for real events if server is running
+  function startPoll() {
+    poll();
+    pollTimer = setInterval(poll, 2000);
+  }
+
+  // Try to hit the real server; fall back gracefully
+  fetch('/api/events').then(() => startPoll()).catch(() => {
+    // Server not running — demo-only mode is fine
+    document.getElementById('liveDot').style.background = 'var(--warn)';
+  });
+</script>

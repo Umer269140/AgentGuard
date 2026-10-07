@@ -1,0 +1,83 @@
+# AgentGuard Default Policy
+# Edit this file to change what your agent is and isn't allowed to do.
+
+agent_name: "demo-agent"
+description: "Default enterprise policy for autonomous AI agents"
+
+# Tools the agent is permitted to use at all.
+# Use ["*"] to allow everything (not recommended for production).
+allowed_tools:
+  - read_file
+  - search_web
+  - write_file
+  - run_command
+  - call_api
+  - send_email
+
+# Resources the agent can NEVER access, regardless of task.
+blocked_resources:
+  - name: "production_database"
+    pattern: "(prod|production).*(db|database|postgres|mysql|mongo)"
+    tools: ["*"]
+    description: "Production databases are off-limits"
+
+  - name: "env_secrets"
+    pattern: "(\\.env|secrets\\.yaml|credentials\\.json|api_key|secret_key|password)"
+    tools: ["read_file", "write_file"]
+    description: "Secret/credential files cannot be read or written"
+
+  - name: "system_dirs"
+    pattern: "^/(etc|root|sys|proc|boot)"
+    tools: ["read_file", "write_file", "run_command"]
+    description: "System directories are off-limits"
+
+  - name: "external_payment_apis"
+    pattern: "(stripe\\.com|paypal\\.com|braintree)"
+    tools: ["call_api"]
+    description: "Payment APIs require a separate approval workflow"
+
+# Spending caps to prevent runaway API usage.
+spend_limits:
+  total: 10.00           # Maximum total spend in USD
+  per_tool:
+    call_api: 5.00       # Max $5 on external API calls
+    send_email: 1.00     # Max $1 on email sends
+
+# Approximate cost per tool call in USD (used for spend tracking).
+tool_costs:
+  call_api: 0.002
+  send_email: 0.001
+  search_web: 0.001
+
+# Actions that need a human to approve before proceeding.
+require_approval:
+  - name: "bulk_delete"
+    tools: ["run_command"]
+    pattern: "rm -rf|del /s|rmdir /s"
+    reason: "Bulk deletion requires human sign-off"
+
+  - name: "send_external_email"
+    tools: ["send_email"]
+    pattern: ".*"
+    reason: "All outbound emails require human review"
+
+  - name: "deploy_to_prod"
+    tools: ["run_command"]
+    pattern: "(deploy|kubectl apply|terraform apply).*(prod|production)"
+    reason: "Production deployments require human approval"
+
+# Fine-grained custom rules.
+custom_rules:
+  - name: "no_data_exfiltration"
+    tools: ["call_api", "send_email"]
+    action: "block"
+    conditions:
+      - pattern: "customer_data|pii|ssn|credit.card"
+        reason: "Potential PII/customer data exfiltration detected"
+
+  - name: "no_self_modification"
+    tools: ["write_file", "run_command"]
+    action: "block"
+    conditions:
+      - pattern: "agentguard|policy\\.yaml"
+        reason: "Agent cannot modify its own guardrails"
