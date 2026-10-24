@@ -2,7 +2,7 @@
 
 **Runtime safety and control layer for autonomous AI agents.**
 
-AgentGuard sits between your AI agent and its tools, enforcing human-defined policies before any action executes — blocking dangerous calls, requiring approval for risky ones, and logging everything.
+AgentGuard sits between your AI agent and its tools, enforcing human-defined policies before any action executes blocking dangerous calls, requiring approval for risky ones, and logging everything.
 
 ```
 Agent  →  AgentGuard  →  Tool
@@ -12,14 +12,14 @@ Agent  →  AgentGuard  →  Tool
 
 ## Why AgentGuard?
 
-Autonomous agents are powerful — and dangerous. A single misconfigured prompt can cause an agent to:
+Autonomous agents are powerful and dangerous. A single misconfigured prompt can cause an agent to:
 - Read production credentials or `.env` files
 - Delete critical data with `rm -rf`
 - Exfiltrate customer PII via email
 - Deploy untested code to production
 - Modify its own guardrails
 
-AgentGuard intercepts every tool call and enforces a human-readable YAML policy — in real time, before any damage is done.
+AgentGuard intercepts every tool call and enforces a human-readable YAML policy in real time, before any damage is done.
 
 ## Quick Start
 
@@ -118,15 +118,15 @@ def read_file(path: str) -> str:
 
 | Decision | Meaning |
 |----------|---------|
-| `ALLOW` | Tool call passes all checks — executes normally |
-| `BLOCK` | Policy violation — raises `PolicyViolationError`, tool never executes |
-| `REQUIRE_APPROVAL` | Pauses for human review — raises `ApprovalDeniedError` if denied |
+| `ALLOW` | Tool call passes all checks executes normally |
+| `BLOCK` | Policy violation raises `PolicyViolationError`, tool never executes |
+| `REQUIRE_APPROVAL` | Pauses for human review raises `ApprovalDeniedError` if denied |
 
 ## Policy Checks (in order)
 
-1. **Allowed tools** — Is this tool permitted at all?
-2. **Blocked resources** — Do the args match any forbidden pattern?
-3. **Spend limits** — Would this call exceed the budget?
+1. **Allowed tools** Is this tool permitted at all?
+2. **Blocked resources** Do the args match any forbidden pattern?
+3. **Spend limits** Would this call exceed the budget?
 4. **Approval rules** — Does this need a human in the loop?
 5. **Custom rules** — Any additional business logic?
 
@@ -144,7 +144,7 @@ Every call is logged to `agentguard_audit.jsonl`:
 python dashboard/server.py
 ```
 
-Real-time visualization of all agent activity — blocked attempts, approvals, and allowed calls — at `http://localhost:8765`. Works without a server too: open `dashboard/index.html` directly and click **▶ Run Demo**.
+Real-time visualization of all agent activity blocked attempts, approvals, and allowed calls at `http://localhost:8765`. Works without a server too: open `dashboard/index.html` directly and click **▶ Run Demo**.
 
 ## Zero-Cost Stack
 
